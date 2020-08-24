@@ -149,39 +149,50 @@ const LCG REMAINING_SKIP[] = {combineLCG<0>(), combineLCG<5*1>(), combineLCG<5*2
 
 
 
-//Gonna have to do something fancy here, as a dungeon spawns next to a cave with an opening, that opening stops chests from being able to generate
 
-static inline bool SimulateDungeonLootSpawn(lcg::Random& rand, int8_t size_x, int8_t size_z, int loopTimes = 2) {
-	bool spawned_chest = false;
-	for(int i2 = 0; i2 < loopTimes; i2++)
+static inline bool PostHardBitMatch(lcg::Random rand, int remaining_dungeons_skip, lcg::Random wanted) {
+	//Skip the mob spawner type being choosen
+	lcg::advance<1>(rand);
+	rand = (REMAINING_SKIP[remaining_dungeons_skip].multiplier * rand + REMAINING_SKIP[remaining_dungeons_skip].addend) & lcg::MASK;
+	
+	//Skip clay, no gen
+	//lcg::advance<30>(curChunkSeed);
+	
+	//std::cout << (lcg::seed2dfz(wanted)-lcg::seed2dfz(curChunkSeed)) << "  "<<(int)remaining_dungeons_skip<< std::endl;
+	
+	return rand == wanted;
+}
+
+static inline bool SimulateInner(lcg::Random& rand, int8_t size_x, int8_t size_z, uint8_t remaining_dungeons_skip, uint64_t wanted) {
+	for(int l2 = 0; l2 < 3; l2++)
 	{
-		for(int l2 = 0; l2 < 3; l2++)
-		{
-			int8_t x_pos = (lcg::dynamic_next_int(rand, (size_x + 2) * 2 + 1) - size_x - 2);
-			int8_t z_pos = (lcg::dynamic_next_int(rand, (size_z + 2) * 2 + 1) - size_z - 2);
-			
-			
-			
-			//If its not next to a wall
-			if (!((x_pos == (size_x + 2) || x_pos == (-size_x - 2)) ||
-				  (z_pos == (size_z + 2) || z_pos == (-size_z - 2))))
-				continue;
-				
-			//If its in a corner, abort
-			
-			if ((x_pos == (size_x + 2) || x_pos == (-size_x - 2)) &&
-				(z_pos == (size_z + 2) || z_pos == (-size_z - 2)))
-				continue;
-			//if (!posValid)
-			//	continue;
-			
-			spawned_chest = true;
-			//Simulate loot gen
-			PopulateDungeonChest(rand);
-			break;
-		}
+		int8_t x_pos = (lcg::dynamic_next_int(rand, (size_x + 2) * 2 + 1) - size_x - 2);
+		int8_t z_pos = (lcg::dynamic_next_int(rand, (size_z + 2) * 2 + 1) - size_z - 2);
+		
+		
+		
+		lcg::Random rand2 = rand;
+		PopulateDungeonChest(rand2);
+		if	(PostHardBitMatch(rand2, remaining_dungeons_skip, wanted))
+			return true;
 	}
-	return spawned_chest;
+	lcg::Random rand2 = rand;
+	return PostHardBitMatch(rand2, remaining_dungeons_skip, wanted);
+}
+static inline bool SimulateDungeonLootSpawn(lcg::Random& rand, int8_t size_x, int8_t size_z, uint8_t remaining_dungeons_skip, uint64_t wanted) {
+	for(int l2 = 0; l2 < 3; l2++)
+	{
+		int8_t x_pos = (lcg::dynamic_next_int(rand, (size_x + 2) * 2 + 1) - size_x - 2);
+		int8_t z_pos = (lcg::dynamic_next_int(rand, (size_z + 2) * 2 + 1) - size_z - 2);
+		
+		
+		lcg::Random rand2 = rand;
+		PopulateDungeonChest(rand2);
+		if	(SimulateInner(rand2, size_x, size_z, remaining_dungeons_skip, wanted))
+			return true;
+	}
+	lcg::Random rand2 = rand;
+	return SimulateInner(rand2, size_x, size_z, remaining_dungeons_skip, wanted);
 }
 
 
@@ -217,25 +228,12 @@ static inline bool doesMatch(uint64_t chunkSeed, uint64_t wanted) {
 		//TODO skip/simulate dungeon loot here
 		//SimulateDungeonLootSpawn(curChunkSeed, size_x, size_z);
 		
-		SimulateDungeonLootSpawn(curChunkSeed, size_x, size_z);
-		
-		//Skip the mob spawner type being choosen
-		lcg::advance<1>(curChunkSeed);
-		curChunkSeed = (REMAINING_SKIP[remaining_dungeons_skip].multiplier * curChunkSeed + REMAINING_SKIP[remaining_dungeons_skip].addend) & lcg::MASK;
-		
-		//Skip clay, no gen
-		//lcg::advance<30>(curChunkSeed);
-		
-		//std::cout << (lcg::seed2dfz(wanted)-lcg::seed2dfz(curChunkSeed)) << "  "<<(int)remaining_dungeons_skip<< std::endl;
-		
-		if(curChunkSeed == wanted)
+		if (SimulateDungeonLootSpawn(curChunkSeed, size_x, size_z, remaining_dungeons_skip, wanted))
 			return true;
 		
 		
-		//1 gen clay
-		//lcg::advance<99-30>(curChunkSeed);
-		//if(CheckChunkSeedAfterClay(curChunkSeed))
-		//	return true;
+		
+		
 	}
 	return false;
 }
@@ -296,18 +294,4 @@ int main(){
 
 	return 0;
 }
-
-
-
-
-//
-
-
-
-
-
-
-
-
-
 
